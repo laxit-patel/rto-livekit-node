@@ -10,6 +10,16 @@ import * as sarvam from '@livekit/agents-plugin-sarvam';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
+import type { ShopifyOrderContext, RTOAttempt } from './shopify/types.js';
+import { shopifyClient } from './shopify/client.js';
+
+// Language code mapping
+const LANGUAGE_CODES: Record<string, { stt: string; tts: string }> = {
+  'hi-IN': { stt: 'hi-IN', tts: 'hi-IN' },
+  'gu-IN': { stt: 'gu-IN', tts: 'gu-IN' },
+  'ta-IN': { stt: 'ta-IN', tts: 'ta-IN' },
+  'te-IN': { stt: 'te-IN', tts: 'te-IN' },
+};
 
 export default defineAgent({
   prewarm: async (proc) => {
@@ -17,40 +27,61 @@ export default defineAgent({
   },
   entry: async (ctx: JobContext) => {
     const roomName = ctx.room.name ?? 'unknown';
-    console.log(`Starting agent session for room: ${roomName}`);
-    console.log(`Using OPENROUTER_API_KEY starting with: ${process.env.OPENROUTER_API_KEY?.substring(0, 4)}...`);
+    console.log(`\n📞 Starting RTO agent session for room: ${roomName}`);
 
-    // Retry connection logic (mirrors Python implementation)
+    // Extract Shopify order context from job metadata
+    let orderContext: ShopifyOrderContext | null = null;
+    try {
+      const metadata = (ctx.job as any)?.metadata || {};
+      if (metadata.orderId) {
+        console.log(`📦 Fetching order context for: ${metadata.orderId}`);
+        orderContext = await shopifyClient.getOrder(metadata.orderId as string);
+        console.log(`✓ Order loaded: ${orderContext.customerName} (${orderContext.customerPhone})`);
+      }
+    } catch (error) {
+      console.warn('⚠️  Could not load Shopify order context:', error);
+    }
+
+    const customerName = orderContext?.customerName || 'customer';
+    const language = orderContext?.language || 'hi-IN';
+    const languageCodes = LANGUAGE_CODES[language] || LANGUAGE_CODES['hi-IN'];
+    const attemptNumber = orderContext?.attemptNumber || 1;
+
+    // Personalized instructions based on order context
+    const agentInstructions = orderContext
+      ? `You are an RTO recovery agent calling ${customerName} regarding order ${orderContext.orderName}.
+This is attempt #${attemptNumber} to reschedule delivery.
+${orderContext.previousAttempts.length > 0 ? `Previous reason: ${orderContext.previousAttempts[0].reason || 'Not provided'}` : ''}
+Stay friendly, brief, and professional. Record the customer's reason for failed delivery.`
+      : `You are an RTO (Return to Origin) recovery assistant for Shopify delivery failures.
+Speak clearly and politely. Ask for the reason of failed delivery and confirm it back briefly.`;
+
+    // Retry connection logic
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        console.log(`Attempting to connect to room (attempt ${attempt}/5)...`);
+        console.log(`🔗 Room connection (attempt ${attempt}/5)...`);
         await ctx.connect();
-        console.log(`Successfully connected to room: ${roomName}`);
+        console.log(`✓ Connected to room: ${roomName}`);
         break;
       } catch (error) {
         if (attempt === 5) {
-          console.error(`Failed to connect after 5 attempts: ${error}`);
+          console.error(`❌ Failed to connect after 5 attempts: ${error}`);
           throw error;
         }
         const waitTime = Math.pow(2, attempt - 1) * 1000;
-        console.warn(`Connection attempt ${attempt} failed: ${error}. Retrying in ${waitTime / 1000}s...`);
+        console.warn(`⏳ Retry in ${waitTime / 1000}s...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
 
     const agent = new voice.Agent({
-      instructions: `
-        You are an RTO (Return to Origin) recovery assistant for Shopify delivery failures.
-        Speak clearly and politely in the customer's language.
-        Supported languages: Hindi, Gujarati, Tamil, Telugu.
-        Ask for one short reason for failed delivery, confirm it back briefly, and keep responses concise.
-      `,
+      instructions: agentInstructions,
     });
 
     const session = new voice.AgentSession({
       stt: new sarvam.STT({
         model: 'saaras:v3',
-        languageCode: 'hi-IN',
+        languageCode: languageCodes.stt,
       }),
       llm: new openaiPlugin.LLM({
         model: 'openai/gpt-4o-mini',
@@ -59,17 +90,45 @@ export default defineAgent({
       }),
       tts: new sarvam.TTS({
         model: 'bulbul:v3',
-        targetLanguageCode: 'hi-IN',
+        targetLanguageCode: languageCodes.tts,
       }),
       vad: ctx.proc.userData.vad as silero.VAD,
     });
 
+    const startTime = Date.now();
     await session.start({ agent, room: ctx.room });
-    
-    // Initial greeting
+    const callDurationSeconds = Math.round((Date.now() - startTime) / 1000);
+
+    // Generate personalized greeting
+    const greetingPrompt = orderContext
+      ? `Greet ${customerName} by name in ${language.split('-')[0]}, reference order ${orderContext.orderName}, and politely ask why the delivery failed. Keep it very brief.`
+      : `Greet the caller and ask why their delivery failed. Respond in ${language.split('-')[0]}.`;
+
     await session.generateReply({
-      instructions: 'Greet the user in Hindi and ask why the delivery failed. If they respond in Gujarati, Tamil, or Telugu, switch to that language.',
+      instructions: greetingPrompt,
     });
+
+    // Record RTO attempt to Shopify (if order context available)
+    if (orderContext) {
+      try {
+        const rtoAttempt: RTOAttempt = {
+          timestamp: new Date().toISOString(),
+          language,
+          agentId: ctx.job?.id || 'unknown',
+          callDurationSeconds,
+          status: 'completed',
+          // Reason would be captured from agent's conversation (MVP: hardcoded)
+          reason: 'Reason recorded during call',
+        };
+
+        await shopifyClient.recordRTOAttempt(orderContext.orderId, rtoAttempt);
+        console.log(`✓ RTO attempt recorded in Shopify`);
+      } catch (error) {
+        console.error('Error recording RTO attempt:', error);
+      }
+    }
+
+    console.log(`\n✓ Session completed (${callDurationSeconds}s)\n`);
   },
 });
 
