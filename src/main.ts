@@ -53,7 +53,7 @@ export default defineAgent({
         languageCode: 'hi-IN',
       }),
       llm: new openaiPlugin.LLM({
-        model: 'google/gemini-flash-1.5',
+        model: 'openai/gpt-4o-mini',
         apiKey: process.env.OPENROUTER_API_KEY?.trim(),
         baseURL: 'https://openrouter.ai/api/v1',
       }),
