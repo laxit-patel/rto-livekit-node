@@ -3,25 +3,26 @@ import type { ShopifyOrderContext, RTOAttempt } from './types.js';
 
 class ShopifyClient {
   private shopName: string;
-  private accessToken: string;
+  private accessToken: string | null;
   private apiVersion = '2026-01';
 
   constructor() {
-    const shopName = process.env.SHOPIFY_SHOP_NAME;
-    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
+    this.shopName = process.env.SHOPIFY_SHOP_NAME || '';
+    this.accessToken = process.env.SHOPIFY_ACCESS_TOKEN?.trim() || null;
 
-    if (!shopName || !accessToken) {
-      throw new Error('Missing Shopify credentials: SHOPIFY_SHOP_NAME and SHOPIFY_ACCESS_TOKEN required');
+    if (!this.shopName) {
+      throw new Error('Missing Shopify credentials: SHOPIFY_SHOP_NAME required');
     }
-
-    this.shopName = shopName;
-    this.accessToken = accessToken;
   }
 
   /**
    * Make HTTP request to Shopify API
    */
   private async request(method: string, path: string, body?: any): Promise<any> {
+    if (!this.accessToken) {
+      throw new Error('Missing Shopify credentials: SHOPIFY_ACCESS_TOKEN required for Shopify API calls');
+    }
+
     const url = `https://${this.shopName}/admin/api/${this.apiVersion}${path}`;
     
     const response = await fetch(url, {

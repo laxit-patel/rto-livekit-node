@@ -42,6 +42,10 @@ router.get('/shopify/auth', (req: Request, res: Response) => {
 router.get('/shopify/callback', async (req: Request, res: Response) => {
   const { code, hmac, shop, state } = req.query as Record<string, string>;
 
+  if (!SHOPIFY_API_SECRET) {
+    return res.status(500).send('Missing SHOPIFY_API_SECRET');
+  }
+
   // Validate HMAC
   if (!validateCallbackHmac(req.query as Record<string, string>, SHOPIFY_API_SECRET)) {
     return res.status(400).send('HMAC validation failed');
@@ -104,7 +108,14 @@ function validateCallbackHmac(params: Record<string, string>, secret: string): b
     .join('&');
 
   const digest = crypto.createHmac('sha256', secret).update(message).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac));
+  const digestBuffer = Buffer.from(digest);
+  const hmacBuffer = Buffer.from(hmac);
+
+  if (digestBuffer.length !== hmacBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(digestBuffer, hmacBuffer);
 }
 
 export default router;
