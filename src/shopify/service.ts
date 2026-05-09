@@ -1,4 +1,5 @@
 import { shopifyClient } from './client.js';
+import { dispatchRTOAgent, type RTODispatchResult } from '../livekit/dispatch.js';
 import type { RTOAttempt, ShopifyOrderContext } from './types.js';
 
 declare global {
@@ -27,6 +28,11 @@ class RTOService {
     });
 
     return orderContext;
+  }
+
+  async dispatchRTOCall(orderId: string): Promise<RTODispatchResult> {
+    const orderContext = await this.getOrderContext(orderId);
+    return dispatchRTOAgent(orderContext);
   }
 
   async recordAttempt(orderId: string, attempt: RTOAttempt): Promise<void> {

@@ -10,6 +10,7 @@ import * as sarvam from '@livekit/agents-plugin-sarvam';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
+import { LIVEKIT_AGENT_NAME } from './livekit/dispatch.js';
 import type { ShopifyOrderContext, RTOAttempt } from './shopify/types.js';
 import { rtoService } from './shopify/service.js';
 import { startWebhookServer } from './webhook-server.js';
@@ -22,6 +23,26 @@ const LANGUAGE_CODES: Record<string, { stt: string; tts: string }> = {
   'te-IN': { stt: 'te-IN', tts: 'te-IN' },
 };
 
+function parseJobMetadata(rawMetadata: unknown): Record<string, unknown> {
+  if (!rawMetadata) {
+    return {};
+  }
+
+  if (typeof rawMetadata === 'string') {
+    try {
+      return JSON.parse(rawMetadata) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof rawMetadata === 'object') {
+    return rawMetadata as Record<string, unknown>;
+  }
+
+  return {};
+}
+
 export default defineAgent({
   prewarm: async (proc) => {
     proc.userData.vad = await silero.VAD.load();
@@ -33,7 +54,7 @@ export default defineAgent({
     // Extract Shopify order context from job metadata
     let orderContext: ShopifyOrderContext | null = null;
     try {
-      const metadata = (ctx.job as any)?.metadata || {};
+      const metadata = parseJobMetadata((ctx.job as any)?.metadata);
       if (metadata.orderId) {
         console.log(`📦 Fetching order context for: ${metadata.orderId}`);
         orderContext = await rtoService.getOrderContext(metadata.orderId as string);
@@ -137,4 +158,7 @@ Speak clearly and politely. Ask for the reason of failed delivery and confirm it
 // The agent connects outbound to LiveKit Cloud — no inbound HTTP port needed for it.
 startWebhookServer(Number(process.env.WEBHOOK_PORT) || 3000);
 
-cli.runApp(new WorkerOptions({ agent: fileURLToPath(import.meta.url) }));
+cli.runApp(new WorkerOptions({
+  agent: fileURLToPath(import.meta.url),
+  agentName: LIVEKIT_AGENT_NAME,
+}));

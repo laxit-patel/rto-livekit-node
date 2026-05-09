@@ -68,12 +68,18 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
     }
 
     console.log(`🚀 Manual RTO trigger for order ${orderId}`);
-    await rtoService.queueRTOJob(orderId as string);
+    const dispatch = await rtoService.dispatchRTOCall(orderId as string);
 
-    res.status(200).json({ message: 'RTO job queued', orderId });
+    res.status(200).json({
+      message: 'RTO agent dispatched',
+      orderId,
+      roomName: dispatch.roomName,
+      dispatchId: dispatch.dispatchId,
+      customerPhone: dispatch.customerPhone,
+    });
   } catch (error) {
     console.error('Error triggering RTO:', error);
-    res.status(500).json({ error: 'Failed to queue RTO job' });
+    res.status(500).json({ error: 'Failed to dispatch RTO agent' });
   }
 });
 
