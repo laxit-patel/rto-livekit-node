@@ -1,7 +1,7 @@
 import { shopifyClient } from './client.js';
 import { dispatchRTOAgent, dispatchRTOAgentSimulation, type RTOSimulationResult } from '../livekit/dispatch.js';
 import { dispatchVapiCall } from '../vapi/call.js';
-import type { RTOAttempt, ShopifyOrderContext } from './types.js';
+import type { RTOAttempt, ShopifyOrderContext, ShopifyOrderSummary } from './types.js';
 
 declare global {
   var rtoQueue: Array<{ timestamp: string; orderContext: ShopifyOrderContext }>;
@@ -10,6 +10,10 @@ declare global {
 class RTOService {
   async getOrderContext(orderId: string): Promise<ShopifyOrderContext> {
     return shopifyClient.getOrder(orderId);
+  }
+
+  async listRecentOrders(limit: number = 20): Promise<ShopifyOrderSummary[]> {
+    return shopifyClient.listRecentOrders(limit);
   }
 
   async queueRTOJob(orderId: string): Promise<ShopifyOrderContext> {

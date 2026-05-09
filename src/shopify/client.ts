@@ -1,5 +1,5 @@
 import { mapShopifyOrderToContext, normalizeOrderId } from './mappers.js';
-import type { ShopifyOrderContext, RTOAttempt } from './types.js';
+import type { ShopifyOrderContext, ShopifyOrderSummary, RTOAttempt } from './types.js';
 
 class ShopifyClient {
   private shopName: string;
@@ -62,6 +62,49 @@ class ShopifyClient {
       console.error('Error fetching order from Shopify:', error);
       throw error;
     }
+  }
+
+  /**
+   * List recent orders for simulation UI.
+   */
+  async listRecentOrders(limit: number = 20): Promise<ShopifyOrderSummary[]> {
+    const boundedLimit = Math.max(1, Math.min(limit, 50));
+    const res = await this.request(
+      'GET',
+      `/orders.json?status=any&limit=${boundedLimit}&fields=id,name,created_at,customer,billing_address,shipping_address`
+    );
+
+    const orders = (res.orders || []) as Array<{
+      id: string | number;
+      name?: string;
+      created_at?: string;
+      customer?: {
+        first_name?: string;
+        last_name?: string;
+        phone?: string;
+      };
+      billing_address?: {
+        phone?: string;
+      };
+      shipping_address?: {
+        phone?: string;
+      };
+    }>;
+
+    return orders.map((order) => {
+      const firstName = order.customer?.first_name?.trim() || '';
+      const lastName = order.customer?.last_name?.trim() || '';
+      const customerName = `${firstName} ${lastName}`.trim() || 'Customer';
+
+      return {
+        orderId: String(order.id),
+        orderName: order.name || String(order.id),
+        customerName,
+        customerPhone:
+          order.customer?.phone || order.shipping_address?.phone || order.billing_address?.phone || '',
+        createdAt: order.created_at || new Date().toISOString(),
+      };
+    });
   }
 
   /**

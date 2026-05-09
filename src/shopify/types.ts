@@ -56,3 +56,11 @@ export interface ShopifyWebhookPayload {
     }>;
   }>;
 }
+
+export interface ShopifyOrderSummary {
+  orderId: string;
+  orderName: string;
+  customerName: string;
+  customerPhone: string;
+  createdAt: string;
+}

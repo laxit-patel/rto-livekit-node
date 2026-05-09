@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import crypto from 'crypto';
 import { rtoService } from './service.js';
 import type { ShopifyWebhookPayload } from './types.js';
+import { renderSimulatorPage } from '../ui/simulator.js';
 
 declare global {
   namespace Express {
@@ -14,6 +15,22 @@ declare global {
 
 const router = Router();
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET || '';
+
+router.get('/simulator', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(renderSimulatorPage());
+});
+
+router.get('/webhooks/orders', async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit || 20);
+    const orders = await rtoService.listRecentOrders(limit);
+    res.status(200).json({ orders });
+  } catch (error) {
+    console.error('Error listing orders:', error);
+    res.status(500).json({ error: 'Failed to list recent orders' });
+  }
+});
 
 /**
  * Verify Shopify webhook signature
