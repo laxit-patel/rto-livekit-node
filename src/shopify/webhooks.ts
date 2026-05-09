@@ -15,13 +15,35 @@ declare global {
 
 const router = Router();
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET || '';
+const SIMULATION_MODE_ENABLED = (() => {
+  const raw = process.env.SIMULATION_MODE_ENABLED?.trim().toLowerCase();
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
+})();
+
+function simulatorDisabledResponse(req: Request, res: Response): Response {
+  if (req.path === '/simulator') {
+    return res.status(404).send('Not found');
+  }
+
+  return res.status(404).json({ error: 'Simulation mode is disabled' });
+}
 
 router.get('/simulator', (_req: Request, res: Response) => {
+  if (!SIMULATION_MODE_ENABLED) {
+    return simulatorDisabledResponse(_req, res);
+  }
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.status(200).send(renderSimulatorPage());
 });
 
 router.get('/webhooks/orders', async (req: Request, res: Response) => {
+  if (!SIMULATION_MODE_ENABLED) {
+    return simulatorDisabledResponse(req, res);
+  }
+
   try {
     const limit = Number(req.query.limit || 20);
     const orders = await rtoService.listRecentOrders(limit);
@@ -107,6 +129,10 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
  * Use this when you want to talk to the agent from browser/mobile using a token.
  */
 router.post('/webhooks/trigger-rto-sim', async (req: Request, res: Response) => {
+  if (!SIMULATION_MODE_ENABLED) {
+    return simulatorDisabledResponse(req, res);
+  }
+
   try {
     const { orderId } = req.query;
     if (!orderId) {
