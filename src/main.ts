@@ -24,7 +24,10 @@ export default defineAgent({
     // Pre-flight LLM connectivity test
     try {
       console.log('Performing pre-flight LLM connectivity test...');
-      const testLLM = new google.LLM({ model: 'gemini-1.5-flash' });
+      const testLLM = new google.LLM({
+        model: 'gemini-1.5-flash-latest',
+        apiKey: process.env.GOOGLE_API_KEY?.trim(),
+      });
       const chatCtx = new llm.ChatContext();
       chatCtx.addMessage({ role: 'user', content: 'ping' });
       await testLLM.chat({ chatCtx });
@@ -67,7 +70,8 @@ export default defineAgent({
         languageCode: 'hi-IN',
       }),
       llm: new google.LLM({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-1.5-flash-latest',
+        apiKey: process.env.GOOGLE_API_KEY?.trim(),
       }),
       tts: new sarvam.TTS({
         model: 'bulbul:v3',
