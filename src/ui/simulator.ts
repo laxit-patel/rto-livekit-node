@@ -294,7 +294,7 @@ export function renderSimulatorPage(): string {
           const payload = await triggerSimulation(order.orderId);
           if (!payload) return;
           try {
-            await copyText('LiveKit URL: ' + payload.livekitUrl + '\nToken: ' + payload.participantToken);
+            await copyText('LiveKit URL: ' + payload.livekitUrl + '\\nToken: ' + payload.participantToken);
           } catch (err) {
             setStatus('Simulation ready but copy failed: ' + String(err.message || err), true);
           }
@@ -342,7 +342,7 @@ export function renderSimulatorPage(): string {
       if (!payload) return;
 
       try {
-        await copyText('LiveKit URL: ' + payload.livekitUrl + '\nToken: ' + payload.participantToken);
+        await copyText('LiveKit URL: ' + payload.livekitUrl + '\\nToken: ' + payload.participantToken);
       } catch (err) {
         setStatus('Simulation ready but copy failed: ' + String(err.message || err), true);
       }
@@ -377,7 +377,7 @@ export function renderSimulatorPage(): string {
         'Room: ' + latest.roomName,
         'Identity: ' + latest.participantIdentity,
         'Token: ' + latest.participantToken,
-      ].join('\n');
+      ].join('\\n');
       try {
         await copyText(text);
         setStatus('Join instructions copied to clipboard.');
@@ -391,7 +391,7 @@ export function renderSimulatorPage(): string {
       const text = [
         'LiveKit URL: ' + latest.livekitUrl,
         'Token: ' + latest.participantToken,
-      ].join('\n');
+      ].join('\\n');
       try {
         await copyText(text);
       } catch (err) {
