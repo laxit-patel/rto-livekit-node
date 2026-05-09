@@ -23,7 +23,7 @@ export default defineAgent({
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         console.log(`Attempting to connect to room (attempt ${attempt}/5)...`);
-        await ctx.connect({ autoSubscribe: true });
+        await ctx.connect();
         console.log(`Successfully connected to room: ${roomName}`);
         break;
       } catch (error) {
