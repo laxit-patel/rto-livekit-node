@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 
 export default defineAgent({
+  name: 'rto-recovery-agent',
   prewarm: async (proc) => {
     proc.userData.vad = await silero.VAD.load();
   },
