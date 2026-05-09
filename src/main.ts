@@ -23,6 +23,90 @@ const LANGUAGE_CODES: Record<string, { stt: string; tts: string }> = {
   'te-IN': { stt: 'te-IN', tts: 'te-IN' },
 };
 
+const GENERIC_UTTERANCE_REGEX = /^(yes|no|ok|okay|haan|ha|hmm|hm|ji|fine|theek hai|thik hai|hello)$/i;
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function getMessageText(item: unknown): string {
+  const maybe = item as {
+    textContent?: string;
+    content?: unknown[];
+  };
+
+  if (typeof maybe.textContent === 'string' && maybe.textContent.trim().length > 0) {
+    return normalizeWhitespace(maybe.textContent);
+  }
+
+  if (Array.isArray(maybe.content)) {
+    const parts = maybe.content.filter((part): part is string => typeof part === 'string');
+    return normalizeWhitespace(parts.join(' '));
+  }
+
+  return '';
+}
+
+function getConversation(session: voice.AgentSession): { userUtterances: string[]; assistantUtterances: string[] } {
+  const userUtterances: string[] = [];
+  const assistantUtterances: string[] = [];
+
+  for (const item of session.history.items) {
+    const maybe = item as { type?: string; role?: string };
+    if (maybe.type !== 'message') {
+      continue;
+    }
+
+    const text = getMessageText(item);
+    if (!text) {
+      continue;
+    }
+
+    if (maybe.role === 'user') {
+      userUtterances.push(text);
+    } else if (maybe.role === 'assistant') {
+      assistantUtterances.push(text);
+    }
+  }
+
+  return { userUtterances, assistantUtterances };
+}
+
+function inferReasonFromUtterances(userUtterances: string[]): string {
+  const candidates = userUtterances
+    .map((text) => normalizeWhitespace(text))
+    .filter((text) => text.length >= 6)
+    .filter((text) => !GENERIC_UTTERANCE_REGEX.test(text));
+
+  if (candidates.length === 0) {
+    return 'Customer reason not clearly captured';
+  }
+
+  // The latest meaningful customer utterance is usually the best reason.
+  return candidates[candidates.length - 1]!;
+}
+
+function buildShopifyNote(params: {
+  orderName: string;
+  reason: string;
+  language: string;
+  callDurationSeconds: number;
+  userUtterances: string[];
+}): string {
+  const transcript = params.userUtterances
+    .slice(-4)
+    .map((line, index) => `${index + 1}. ${line}`)
+    .join(' | ');
+
+  return [
+    `RTO AI Call (${params.orderName})`,
+    `Reason: ${params.reason}`,
+    `Language: ${params.language}`,
+    `Duration: ${params.callDurationSeconds}s`,
+    transcript ? `Customer transcript: ${transcript}` : 'Customer transcript: Not captured',
+  ].join('\n');
+}
+
 function parseJobMetadata(rawMetadata: unknown): Record<string, unknown> {
   if (!rawMetadata) {
     return {};
@@ -130,6 +214,9 @@ Speak clearly and politely. Ask for the reason of failed delivery and confirm it
       instructions: greetingPrompt,
     });
 
+    const { userUtterances } = getConversation(session);
+    const inferredReason = inferReasonFromUtterances(userUtterances);
+
     // Record RTO attempt to Shopify (if order context available)
     if (orderContext) {
       try {
@@ -139,11 +226,20 @@ Speak clearly and politely. Ask for the reason of failed delivery and confirm it
           agentId: ctx.job?.id || 'unknown',
           callDurationSeconds,
           status: 'completed',
-          // Reason would be captured from agent's conversation (MVP: hardcoded)
-          reason: 'Reason recorded during call',
+          reason: inferredReason,
         };
 
         await rtoService.recordAttempt(orderContext.orderId, rtoAttempt);
+        await rtoService.addOrderNote(
+          orderContext.orderId,
+          buildShopifyNote({
+            orderName: orderContext.orderName,
+            reason: inferredReason,
+            language,
+            callDurationSeconds,
+            userUtterances,
+          })
+        );
         console.log(`✓ RTO attempt recorded in Shopify`);
       } catch (error) {
         console.error('Error recording RTO attempt:', error);
