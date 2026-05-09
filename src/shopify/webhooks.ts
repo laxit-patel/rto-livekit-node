@@ -86,6 +86,43 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
 });
 
 /**
+ * Simulation trigger for testing voice flow over LiveKit WebRTC (no PSTN call).
+ * Use this when you want to talk to the agent from browser/mobile using a token.
+ */
+router.post('/webhooks/trigger-rto-sim', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.query;
+    if (!orderId) {
+      return res.status(400).json({ error: 'orderId required' });
+    }
+
+    console.log(`🧪 Manual RTO simulation trigger for order ${orderId}`);
+    const simulation = await rtoService.dispatchRTOCallSimulation(orderId as string);
+
+    res.status(200).json({
+      message: 'RTO simulation room ready',
+      provider: 'livekit-simulation',
+      orderId,
+      roomName: simulation.roomName,
+      dispatchId: simulation.dispatchId,
+      livekitUrl: simulation.livekitUrl,
+      meetUrl: simulation.meetUrl,
+      participantIdentity: simulation.participantIdentity,
+      participantToken: simulation.participantToken,
+      joinSteps: [
+        'Open https://meet.livekit.io',
+        'Paste LIVEKIT_URL from response',
+        'Paste participantToken from response',
+        'Join room and speak to the agent',
+      ],
+    });
+  } catch (error) {
+    console.error('Error triggering RTO simulation:', error);
+    res.status(500).json({ error: 'Failed to create RTO simulation room' });
+  }
+});
+
+/**
  * Health check endpoint
  */
 router.get('/webhooks/health', (req: Request, res: Response) => {

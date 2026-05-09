@@ -1,5 +1,5 @@
 import { shopifyClient } from './client.js';
-import { dispatchRTOAgent } from '../livekit/dispatch.js';
+import { dispatchRTOAgent, dispatchRTOAgentSimulation, type RTOSimulationResult } from '../livekit/dispatch.js';
 import { dispatchVapiCall } from '../vapi/call.js';
 import type { RTOAttempt, ShopifyOrderContext } from './types.js';
 
@@ -47,6 +47,11 @@ class RTOService {
     }
 
     return dispatchVapiCall(orderContext);
+  }
+
+  async dispatchRTOCallSimulation(orderId: string): Promise<RTOSimulationResult> {
+    const orderContext = await this.getOrderContext(orderId);
+    return dispatchRTOAgentSimulation(orderContext);
   }
 
   async recordAttempt(orderId: string, attempt: RTOAttempt): Promise<void> {

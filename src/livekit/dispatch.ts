@@ -1,4 +1,4 @@
-import { AgentDispatchClient, RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, AgentDispatchClient, RoomServiceClient } from 'livekit-server-sdk';
 import { normalizeOrderId } from '../shopify/mappers.js';
 import type { ShopifyOrderContext } from '../shopify/types.js';
 
@@ -9,6 +9,13 @@ export interface RTODispatchResult {
   roomName: string;
   customerPhone: string;
   orderId: string;
+}
+
+export interface RTOSimulationResult extends RTODispatchResult {
+  participantIdentity: string;
+  participantToken: string;
+  livekitUrl: string;
+  meetUrl: string;
 }
 
 function getLiveKitApiHost(): string {
@@ -48,6 +55,10 @@ function buildRoomName(orderId: string): string {
   return `rto-${normalizeOrderId(orderId)}-${Date.now()}`;
 }
 
+function buildParticipantIdentity(orderId: string): string {
+  return `sim-caller-${normalizeOrderId(orderId)}-${Date.now()}`;
+}
+
 export async function dispatchRTOAgent(orderContext: ShopifyOrderContext): Promise<RTODispatchResult> {
   const { apiKey, apiSecret, host } = getLiveKitCredentials();
   const roomServiceClient = new RoomServiceClient(host, apiKey, apiSecret);
@@ -77,5 +88,34 @@ export async function dispatchRTOAgent(orderContext: ShopifyOrderContext): Promi
     roomName,
     customerPhone: orderContext.customerPhone,
     orderId: orderContext.orderId,
+  };
+}
+
+export async function dispatchRTOAgentSimulation(
+  orderContext: ShopifyOrderContext
+): Promise<RTOSimulationResult> {
+  const dispatch = await dispatchRTOAgent(orderContext);
+  const { apiKey, apiSecret } = getLiveKitCredentials();
+  const participantIdentity = buildParticipantIdentity(orderContext.orderId);
+
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: participantIdentity,
+    name: `${orderContext.customerName} (Sim)`,
+    ttl: '30m',
+  });
+
+  token.addGrant({
+    roomJoin: true,
+    room: dispatch.roomName,
+    canPublish: true,
+    canSubscribe: true,
+  });
+
+  return {
+    ...dispatch,
+    participantIdentity,
+    participantToken: await token.toJwt(),
+    livekitUrl: process.env.LIVEKIT_URL?.trim() || '',
+    meetUrl: 'https://meet.livekit.io',
   };
 }
