@@ -221,3 +221,110 @@ Health check endpoint.
 ## Support
 
 For issues or feature requests, contact the development team or check the main README.
+
+---
+
+## Quick Setup Checklist (Store Admin Path)
+
+Use this checklist if you want the fastest path for this project.
+You do not need Shopify CLI for this backend-only integration.
+
+### 1. Create the app in Shopify store admin
+
+- Open Shopify store admin (not Dev Dashboard)
+- Go to **Settings -> Apps and sales channels -> Develop apps**
+- Click **Create an app**
+- App name suggestion: `RTO Agent Backend`
+
+### 2. Configure Admin API scopes
+
+Open **Configure Admin API scopes** and enable:
+
+- `read_orders`
+- `write_orders`
+- `read_fulfillments`
+- `write_fulfillments`
+
+Save changes.
+
+### 3. Install app and copy credentials
+
+- Click **Install app**
+- Copy **Admin API access token** (shown once)
+- Copy **API key** and **API secret**
+
+### 4. Add Railway environment variables
+
+Set these in Railway:
+
+- `SHOPIFY_SHOP_NAME=<your-store>.myshopify.com`
+- `SHOPIFY_ACCESS_TOKEN=<admin-api-access-token>`
+- `SHOPIFY_API_KEY=<api-key>`
+- `SHOPIFY_API_SECRET=<api-secret>`
+- `SHOPIFY_WEBHOOK_SECRET=<strong-random-string>`
+- `DEFAULT_LANGUAGE=hi-IN`
+- `WEBHOOK_PORT=3000`
+
+### 5. Deploy and confirm webhook server health
+
+After deploy, open:
+
+- `https://<your-railway-domain>/webhooks/health`
+
+Expected JSON:
+
+```json
+{ "status": "ok", "timestamp": "..." }
+```
+
+### 6. Register webhook in Shopify
+
+In Shopify admin:
+
+- Go to **Settings -> Notifications -> Webhooks**
+- Create webhook with:
+  - **Format:** JSON
+  - **URL:** `https://<your-railway-domain>/webhooks/fulfillment-error`
+  - **Secret:** same value as `SHOPIFY_WEBHOOK_SECRET`
+
+For event/topic, choose the fulfillment-failure-related topic available in your store UI.
+Shopify labels can vary slightly by version.
+
+### 7. Run manual integration test
+
+Call the manual endpoint:
+
+```bash
+curl -X POST "https://<your-railway-domain>/webhooks/trigger-rto?orderId=<shopify-order-id>"
+```
+
+Expected response:
+
+```json
+{ "message": "RTO job queued", "orderId": "..." }
+```
+
+### 8. Verify logs and data writeback
+
+Check app logs for:
+
+- Order context loaded from Shopify
+- RTO job queued
+- Attempt written back to Shopify metafield
+
+### 9. Common mistakes to avoid
+
+- Using Dev Dashboard app version flow for this backend setup
+- Forgetting to install app after setting scopes
+- Using parsed JSON instead of raw body for HMAC verification
+- Mismatched webhook secret between Shopify and Railway
+- Using store admin domain instead of `<store>.myshopify.com` in `SHOPIFY_SHOP_NAME`
+
+### 10. Docs to keep open while setting up
+
+- Generate admin app tokens:
+  - https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/generate-app-access-tokens-admin
+- HTTPS webhook delivery and HMAC validation:
+  - https://shopify.dev/docs/apps/build/webhooks/subscribe/https
+- Webhook references:
+  - https://shopify.dev/docs/api/webhooks

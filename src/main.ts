@@ -11,7 +11,8 @@ import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import type { ShopifyOrderContext, RTOAttempt } from './shopify/types.js';
-import { shopifyClient } from './shopify/client.js';
+import { rtoService } from './shopify/service.js';
+import { startWebhookServer } from './webhook-server.js';
 
 // Language code mapping
 const LANGUAGE_CODES: Record<string, { stt: string; tts: string }> = {
@@ -35,7 +36,7 @@ export default defineAgent({
       const metadata = (ctx.job as any)?.metadata || {};
       if (metadata.orderId) {
         console.log(`📦 Fetching order context for: ${metadata.orderId}`);
-        orderContext = await shopifyClient.getOrder(metadata.orderId as string);
+        orderContext = await rtoService.getOrderContext(metadata.orderId as string);
         console.log(`✓ Order loaded: ${orderContext.customerName} (${orderContext.customerPhone})`);
       }
     } catch (error) {
@@ -121,7 +122,7 @@ Speak clearly and politely. Ask for the reason of failed delivery and confirm it
           reason: 'Reason recorded during call',
         };
 
-        await shopifyClient.recordRTOAttempt(orderContext.orderId, rtoAttempt);
+        await rtoService.recordAttempt(orderContext.orderId, rtoAttempt);
         console.log(`✓ RTO attempt recorded in Shopify`);
       } catch (error) {
         console.error('Error recording RTO attempt:', error);
@@ -131,5 +132,9 @@ Speak clearly and politely. Ask for the reason of failed delivery and confirm it
     console.log(`\n✓ Session completed (${callDurationSeconds}s)\n`);
   },
 });
+
+// Start webhook HTTP server (Shopify webhooks) alongside the LiveKit agent worker.
+// The agent connects outbound to LiveKit Cloud — no inbound HTTP port needed for it.
+startWebhookServer(Number(process.env.WEBHOOK_PORT) || 3000);
 
 cli.runApp(new WorkerOptions({ agent: fileURLToPath(import.meta.url) }));

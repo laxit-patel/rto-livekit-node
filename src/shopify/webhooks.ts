@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import crypto from 'crypto';
-import { shopifyClient } from './client.js';
+import { rtoService } from './service.js';
 import type { ShopifyWebhookPayload } from './types.js';
 
 declare global {
@@ -14,10 +14,6 @@ declare global {
 
 const router = Router();
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET || '';
-
-declare global {
-  var rtoQueue: Array<{ timestamp: string; orderContext: any }>;
-}
 
 /**
  * Verify Shopify webhook signature
@@ -50,7 +46,7 @@ router.post('/webhooks/fulfillment-error', (req: Request, res: Response) => {
     console.log(`📦 Fulfillment error received for order ${orderId}`);
 
     // Queue RTO job
-    queueRTOJob(orderId).catch((err) => {
+    rtoService.queueRTOJob(orderId).catch((err) => {
       console.error('Error queuing RTO job:', err);
     });
 
@@ -72,7 +68,7 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
     }
 
     console.log(`🚀 Manual RTO trigger for order ${orderId}`);
-    await queueRTOJob(orderId as string);
+    await rtoService.queueRTOJob(orderId as string);
 
     res.status(200).json({ message: 'RTO job queued', orderId });
   } catch (error) {
@@ -80,41 +76,6 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to queue RTO job' });
   }
 });
-
-/**
- * Queue RTO job with order context
- * In production, this would push to a job queue (Bull, RabbitMQ, etc.)
- * For now, we'll log and store for LiveKit to pick up
- */
-async function queueRTOJob(orderId: string): Promise<void> {
-  try {
-    // Fetch order context from Shopify
-    const orderContext = await shopifyClient.getOrder(orderId);
-
-    // In production:
-    // 1. Store in database (PostgreSQL, MongoDB)
-    // 2. Push to job queue (Bull)
-    // 3. LiveKit agent worker subscribes to queue events
-
-    // For MVP, we'll just log it and store in memory
-    console.log('✓ RTO job queued:', {
-      orderId,
-      customerName: orderContext.customerName,
-      attemptNumber: orderContext.attemptNumber,
-      language: orderContext.language,
-    });
-
-    // Store for local reference (in production, use persistent storage)
-    globalThis.rtoQueue = globalThis.rtoQueue || [];
-    globalThis.rtoQueue.push({
-      timestamp: new Date().toISOString(),
-      orderContext,
-    });
-  } catch (error) {
-    console.error('Error queuing RTO job:', error);
-    throw error;
-  }
-}
 
 /**
  * Health check endpoint
