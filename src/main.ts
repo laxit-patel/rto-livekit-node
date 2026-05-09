@@ -4,9 +4,8 @@ import {
   cli,
   defineAgent,
   voice,
-  llm,
 } from '@livekit/agents';
-import * as google from '@livekit/agents-plugin-google';
+import * as openaiPlugin from '@livekit/agents-plugin-openai';
 import * as sarvam from '@livekit/agents-plugin-sarvam';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
@@ -19,23 +18,7 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     const roomName = ctx.room.name ?? 'unknown';
     console.log(`Starting agent session for room: ${roomName}`);
-    console.log(`Using GOOGLE_API_KEY starting with: ${process.env.GOOGLE_API_KEY?.substring(0, 4)}...`);
-
-    // Pre-flight LLM connectivity test
-    try {
-      console.log('Performing pre-flight LLM connectivity test...');
-      const testLLM = new google.LLM({
-        model: 'gemini-1.5-flash-latest',
-        apiKey: process.env.GOOGLE_API_KEY?.trim(),
-      });
-      const chatCtx = new llm.ChatContext();
-      chatCtx.addMessage({ role: 'user', content: 'ping' });
-      await testLLM.chat({ chatCtx });
-      console.log('LLM Connectivity Test: SUCCESS');
-    } catch (error) {
-      console.error('LLM Connectivity Test: FAILED');
-      console.error(`Error details: ${error}`);
-    }
+    console.log(`Using OPENROUTER_API_KEY starting with: ${process.env.OPENROUTER_API_KEY?.substring(0, 4)}...`);
 
     // Retry connection logic (mirrors Python implementation)
     for (let attempt = 1; attempt <= 5; attempt++) {
@@ -69,9 +52,10 @@ export default defineAgent({
         model: 'saaras:v3',
         languageCode: 'hi-IN',
       }),
-      llm: new google.LLM({
-        model: 'gemini-1.5-flash-latest',
-        apiKey: process.env.GOOGLE_API_KEY?.trim(),
+      llm: new openaiPlugin.LLM({
+        model: 'google/gemini-flash-1.5',
+        apiKey: process.env.OPENROUTER_API_KEY?.trim(),
+        baseURL: 'https://openrouter.ai/api/v1',
       }),
       tts: new sarvam.TTS({
         model: 'bulbul:v3',
