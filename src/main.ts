@@ -18,6 +18,7 @@ export default defineAgent({
   entry: async (ctx: JobContext) => {
     const roomName = ctx.room.name ?? 'unknown';
     console.log(`Starting agent session for room: ${roomName}`);
+    console.log(`Using GOOGLE_API_KEY starting with: ${process.env.GOOGLE_API_KEY?.substring(0, 4)}...`);
 
     // Retry connection logic (mirrors Python implementation)
     for (let attempt = 1; attempt <= 5; attempt++) {
