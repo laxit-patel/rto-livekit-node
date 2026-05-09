@@ -1,5 +1,6 @@
 import { shopifyClient } from './client.js';
-import { dispatchRTOAgent, type RTODispatchResult } from '../livekit/dispatch.js';
+import { dispatchRTOAgent } from '../livekit/dispatch.js';
+import { dispatchVapiCall } from '../vapi/call.js';
 import type { RTOAttempt, ShopifyOrderContext } from './types.js';
 
 declare global {
@@ -30,9 +31,22 @@ class RTOService {
     return orderContext;
   }
 
-  async dispatchRTOCall(orderId: string): Promise<RTODispatchResult> {
+  async dispatchRTOCall(orderId: string): Promise<OutboundCallResult> {
     const orderContext = await this.getOrderContext(orderId);
-    return dispatchRTOAgent(orderContext);
+    const provider = (process.env.OUTBOUND_CALL_PROVIDER || 'vapi').trim().toLowerCase();
+
+    if (provider === 'livekit') {
+      const livekitDispatch = await dispatchRTOAgent(orderContext);
+      return {
+        provider: 'livekit',
+        orderId: livekitDispatch.orderId,
+        customerPhone: livekitDispatch.customerPhone,
+        dispatchId: livekitDispatch.dispatchId,
+        roomName: livekitDispatch.roomName,
+      };
+    }
+
+    return dispatchVapiCall(orderContext);
   }
 
   async recordAttempt(orderId: string, attempt: RTOAttempt): Promise<void> {
@@ -47,5 +61,20 @@ class RTOService {
     await shopifyClient.addOrderNote(orderId, note);
   }
 }
+
+export type OutboundCallResult =
+  | {
+      provider: 'livekit';
+      orderId: string;
+      customerPhone: string;
+      dispatchId: string;
+      roomName: string;
+    }
+  | {
+      provider: 'vapi';
+      orderId: string;
+      customerPhone: string;
+      callId: string;
+    };
 
 export const rtoService = new RTOService();

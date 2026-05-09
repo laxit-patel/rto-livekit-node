@@ -71,15 +71,17 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
     const dispatch = await rtoService.dispatchRTOCall(orderId as string);
 
     res.status(200).json({
-      message: 'RTO agent dispatched',
+      message: 'RTO call dispatched',
+      provider: dispatch.provider,
       orderId,
-      roomName: dispatch.roomName,
-      dispatchId: dispatch.dispatchId,
       customerPhone: dispatch.customerPhone,
+      roomName: dispatch.provider === 'livekit' ? dispatch.roomName : undefined,
+      dispatchId: dispatch.provider === 'livekit' ? dispatch.dispatchId : undefined,
+      callId: dispatch.provider === 'vapi' ? dispatch.callId : undefined,
     });
   } catch (error) {
     console.error('Error triggering RTO:', error);
-    res.status(500).json({ error: 'Failed to dispatch RTO agent' });
+    res.status(500).json({ error: 'Failed to dispatch RTO call' });
   }
 });
 
