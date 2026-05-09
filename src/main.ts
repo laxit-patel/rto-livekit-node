@@ -4,6 +4,7 @@ import {
   cli,
   defineAgent,
   voice,
+  llm,
 } from '@livekit/agents';
 import * as google from '@livekit/agents-plugin-google';
 import * as sarvam from '@livekit/agents-plugin-sarvam';
@@ -19,6 +20,19 @@ export default defineAgent({
     const roomName = ctx.room.name ?? 'unknown';
     console.log(`Starting agent session for room: ${roomName}`);
     console.log(`Using GOOGLE_API_KEY starting with: ${process.env.GOOGLE_API_KEY?.substring(0, 4)}...`);
+
+    // Pre-flight LLM connectivity test
+    try {
+      console.log('Performing pre-flight LLM connectivity test...');
+      const testLLM = new google.LLM({ model: 'gemini-1.5-flash' });
+      const chatCtx = new llm.ChatContext();
+      chatCtx.addMessage({ role: 'user', content: 'ping' });
+      await testLLM.chat({ chatCtx });
+      console.log('LLM Connectivity Test: SUCCESS');
+    } catch (error) {
+      console.error('LLM Connectivity Test: FAILED');
+      console.error(`Error details: ${error}`);
+    }
 
     // Retry connection logic (mirrors Python implementation)
     for (let attempt = 1; attempt <= 5; attempt++) {
