@@ -4,6 +4,21 @@ import type { ShopifyOrderContext } from '../shopify/types.js';
 
 export const LIVEKIT_AGENT_NAME = process.env.LIVEKIT_AGENT_NAME?.trim() || 'rto-recovery-agent';
 
+function getSimulationTokenTtl(): string {
+  return process.env.LIVEKIT_SIM_TOKEN_TTL?.trim() || '24h';
+}
+
+function getRoomEmptyTimeoutSeconds(): number {
+  const raw = process.env.LIVEKIT_ROOM_EMPTY_TIMEOUT_SECONDS?.trim();
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return 60 * 30;
+}
+
 export interface RTODispatchResult {
   dispatchId: string;
   roomName: string;
@@ -67,7 +82,7 @@ export async function dispatchRTOAgent(orderContext: ShopifyOrderContext): Promi
 
   await roomServiceClient.createRoom({
     name: roomName,
-    emptyTimeout: 5 * 60,
+    emptyTimeout: getRoomEmptyTimeoutSeconds(),
     maxParticipants: 2,
     metadata: JSON.stringify({
       source: 'shopify-rto',
@@ -101,7 +116,7 @@ export async function dispatchRTOAgentSimulation(
   const token = new AccessToken(apiKey, apiSecret, {
     identity: participantIdentity,
     name: `${orderContext.customerName} (Sim)`,
-    ttl: '30m',
+    ttl: getSimulationTokenTtl(),
   });
 
   token.addGrant({
