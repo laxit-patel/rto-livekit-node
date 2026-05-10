@@ -155,7 +155,15 @@ router.get('/webhooks/trigger/:orderId', async (req: Request, res: Response) => 
   return handleSimulationTrigger(req, res, req.params.orderId);
 });
 
+router.get('/webhook/trigger/:orderId', async (req: Request, res: Response) => {
+  return handleSimulationTrigger(req, res, req.params.orderId);
+});
+
 router.get('/webhooks/trigger-rto-sim/:orderId', async (req: Request, res: Response) => {
+  return handleSimulationTrigger(req, res, req.params.orderId);
+});
+
+router.get('/webhook/trigger-rto-sim/:orderId', async (req: Request, res: Response) => {
   return handleSimulationTrigger(req, res, req.params.orderId);
 });
 
