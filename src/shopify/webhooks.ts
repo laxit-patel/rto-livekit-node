@@ -3,7 +3,6 @@ import type { Request, Response } from 'express';
 import crypto from 'crypto';
 import { rtoService } from './service.js';
 import type { ShopifyWebhookPayload } from './types.js';
-import { renderSimulatorPage } from '../ui/simulator.js';
 
 declare global {
   namespace Express {
@@ -22,37 +21,9 @@ const SIMULATION_MODE_ENABLED = (() => {
   return process.env.NODE_ENV !== 'production';
 })();
 
-function simulatorDisabledResponse(req: Request, res: Response): Response {
-  if (req.path === '/simulator') {
-    return res.status(404).send('Not found');
-  }
-
+function simulatorDisabledResponse(_req: Request, res: Response): Response {
   return res.status(404).json({ error: 'Simulation mode is disabled' });
 }
-
-router.get('/simulator', (_req: Request, res: Response) => {
-  if (!SIMULATION_MODE_ENABLED) {
-    return simulatorDisabledResponse(_req, res);
-  }
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(renderSimulatorPage());
-});
-
-router.get('/webhooks/orders', async (req: Request, res: Response) => {
-  if (!SIMULATION_MODE_ENABLED) {
-    return simulatorDisabledResponse(req, res);
-  }
-
-  try {
-    const limit = Number(req.query.limit || 20);
-    const orders = await rtoService.listRecentOrders(limit);
-    res.status(200).json({ orders });
-  } catch (error) {
-    console.error('Error listing orders:', error);
-    res.status(500).json({ error: 'Failed to list recent orders' });
-  }
-});
 
 /**
  * Verify Shopify webhook signature
@@ -141,6 +112,9 @@ router.post('/webhooks/trigger-rto-sim', async (req: Request, res: Response) => 
 
     console.log(`🧪 Manual RTO simulation trigger for order ${orderId}`);
     const simulation = await rtoService.dispatchRTOCallSimulation(orderId as string);
+    const directJoinUrl = `https://meet.livekit.io/custom?liveKitUrl=${encodeURIComponent(
+      simulation.livekitUrl
+    )}&token=${encodeURIComponent(simulation.participantToken)}`;
 
     res.status(200).json({
       message: 'RTO simulation room ready',
@@ -150,14 +124,10 @@ router.post('/webhooks/trigger-rto-sim', async (req: Request, res: Response) => 
       dispatchId: simulation.dispatchId,
       livekitUrl: simulation.livekitUrl,
       meetUrl: simulation.meetUrl,
+      directJoinUrl,
       participantIdentity: simulation.participantIdentity,
       participantToken: simulation.participantToken,
-      joinSteps: [
-        'Open https://meet.livekit.io',
-        'Paste LIVEKIT_URL from response',
-        'Paste participantToken from response',
-        'Join room and speak to the agent',
-      ],
+      joinSteps: ['Open directJoinUrl and start talking to the agent'],
     });
   } catch (error) {
     console.error('Error triggering RTO simulation:', error);
