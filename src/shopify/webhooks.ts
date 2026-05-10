@@ -25,6 +25,48 @@ function simulatorDisabledResponse(_req: Request, res: Response): Response {
   return res.status(404).json({ error: 'Simulation mode is disabled' });
 }
 
+async function handleSimulationTrigger(req: Request, res: Response, orderIdRaw: unknown): Promise<Response> {
+  if (!SIMULATION_MODE_ENABLED) {
+    return simulatorDisabledResponse(req, res);
+  }
+
+  const orderId = String(orderIdRaw || '').trim();
+  if (!orderId) {
+    return res.status(400).json({ error: 'orderId required' });
+  }
+
+  try {
+    console.log(`🧪 Manual RTO simulation trigger for order ${orderId}`);
+    const simulation = await rtoService.dispatchRTOCallSimulation(orderId);
+    const directJoinUrl = `https://meet.livekit.io/custom?liveKitUrl=${encodeURIComponent(
+      simulation.livekitUrl
+    )}&token=${encodeURIComponent(simulation.participantToken)}`;
+
+    const shouldRedirect = String(req.query.redirect || '').toLowerCase() === '1';
+    if (shouldRedirect) {
+      res.redirect(302, directJoinUrl);
+      return res;
+    }
+
+    return res.status(200).json({
+      message: 'RTO simulation room ready',
+      provider: 'livekit-simulation',
+      orderId,
+      roomName: simulation.roomName,
+      dispatchId: simulation.dispatchId,
+      livekitUrl: simulation.livekitUrl,
+      meetUrl: simulation.meetUrl,
+      directJoinUrl,
+      participantIdentity: simulation.participantIdentity,
+      participantToken: simulation.participantToken,
+      joinSteps: ['Open directJoinUrl and start talking to the agent'],
+    });
+  } catch (error) {
+    console.error('Error triggering RTO simulation:', error);
+    return res.status(500).json({ error: 'Failed to create RTO simulation room' });
+  }
+}
+
 /**
  * Verify Shopify webhook signature
  */
@@ -100,39 +142,21 @@ router.post('/webhooks/trigger-rto', async (req: Request, res: Response) => {
  * Use this when you want to talk to the agent from browser/mobile using a token.
  */
 router.post('/webhooks/trigger-rto-sim', async (req: Request, res: Response) => {
-  if (!SIMULATION_MODE_ENABLED) {
-    return simulatorDisabledResponse(req, res);
-  }
+  return handleSimulationTrigger(req, res, req.query.orderId);
+});
 
-  try {
-    const { orderId } = req.query;
-    if (!orderId) {
-      return res.status(400).json({ error: 'orderId required' });
-    }
+/**
+ * Phone-friendly simulation trigger routes
+ * - GET /webhooks/trigger/:orderId
+ * - GET /webhooks/trigger-rto-sim/:orderId
+ * Add ?redirect=1 to jump directly into LiveKit Meet.
+ */
+router.get('/webhooks/trigger/:orderId', async (req: Request, res: Response) => {
+  return handleSimulationTrigger(req, res, req.params.orderId);
+});
 
-    console.log(`🧪 Manual RTO simulation trigger for order ${orderId}`);
-    const simulation = await rtoService.dispatchRTOCallSimulation(orderId as string);
-    const directJoinUrl = `https://meet.livekit.io/custom?liveKitUrl=${encodeURIComponent(
-      simulation.livekitUrl
-    )}&token=${encodeURIComponent(simulation.participantToken)}`;
-
-    res.status(200).json({
-      message: 'RTO simulation room ready',
-      provider: 'livekit-simulation',
-      orderId,
-      roomName: simulation.roomName,
-      dispatchId: simulation.dispatchId,
-      livekitUrl: simulation.livekitUrl,
-      meetUrl: simulation.meetUrl,
-      directJoinUrl,
-      participantIdentity: simulation.participantIdentity,
-      participantToken: simulation.participantToken,
-      joinSteps: ['Open directJoinUrl and start talking to the agent'],
-    });
-  } catch (error) {
-    console.error('Error triggering RTO simulation:', error);
-    res.status(500).json({ error: 'Failed to create RTO simulation room' });
-  }
+router.get('/webhooks/trigger-rto-sim/:orderId', async (req: Request, res: Response) => {
+  return handleSimulationTrigger(req, res, req.params.orderId);
 });
 
 /**
